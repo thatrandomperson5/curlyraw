@@ -5,7 +5,7 @@ when not defined(nimdoc):
 when not compileOption("threads"):
   {.error: "Using --threads:on is required by Curly.".}
 
-import std/strutils, std/locks, std/random, webby/httpheaders, zippy,
+import std/strutils, std/locks, std/random, webby/httpheaders,
     std/deques, std/tables, std/options
 
 import libcurl except Option
@@ -48,7 +48,7 @@ type
     code*: int ## HTTP status code of the response
     url*: string ## Final URL, after any redirects
     headers*: HttpHeaders
-    body*: string ## The response body (uncompressed if gzip'ed)
+    body*: string ## The response body
     request*: RequestInfo ## Info about the request this response is for
 
   RequestInfo* = object
@@ -460,8 +460,6 @@ proc makeRequest*(
       result.request.url = move rw.url
       addHeaders(result.headers, rw.responseHeadersForLibcurl.str)
       result.body = move rw.responseBodyForLibcurl.str
-      if result.headers["Content-Encoding"] == "gzip":
-        result.body = uncompress(result.body, dfGzip)
     else:
       raise newException(CatchableError, move rw.error)
   finally:
@@ -529,12 +527,6 @@ proc unwrapResponse(
   if rw.error == "":
     addHeaders(response.headers, rw.responseHeadersForLibcurl.str)
     response.body = move rw.responseBodyForLibcurl.str
-    if response.headers["Content-Encoding"] == "gzip":
-      try:
-        response.body = uncompress(response.body, dfGzip)
-      except:
-        rw.error = "Uncompressing gzip'ed response body failed: " &
-          getCurrentExceptionMsg()
   (move response, move rw.error)
 
 proc makeRequests*(
@@ -909,8 +901,6 @@ proc makeRequest*(
       deallocShared(tmpcstring)
       addHeaders(result.headers, headerWrap.str)
       result.body = move bodyWrap.str
-      if result.headers["Content-Encoding"] == "gzip":
-        result.body = uncompress(result.body, dfGzip)
     else:
       raise newException(
         CatchableError,
